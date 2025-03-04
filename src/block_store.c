@@ -10,6 +10,18 @@
 // remove it before you submit. Just allows things to compile initially.
 #define UNUSED(x) (void)(x)
 
+
+typedef struct {
+
+    uint8_t *bitmap;   // Bitmap to track free/used blocks
+    uint8_t *data;     // Blocks are contiguous, essentially making a block device a giant physical array, this is that array
+    size_t num_blocks; // Total number of blocks in the block storage device
+    size_t block_size; // The number of bytes per block
+
+} block_store_t;
+
+
+
 block_store_t *block_store_create()
 {
 	return NULL;
