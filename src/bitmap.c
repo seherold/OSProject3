@@ -189,6 +189,15 @@ bitmap_t *bitmap_import(const size_t n_bits, const void *const bitmap_data)
 	return NULL;
 }
 
+
+///
+/// Creates a new bitmap using the provided data
+/// Note: This uses the given block of memory
+///  and does not free this pointer on destruction
+/// \param n_bits The number of bits in the bitmap
+/// \param bitmap_data The data to import
+/// \return New bitmap pointer, NULL on error
+///
 bitmap_t *bitmap_overlay(const size_t n_bits, void *const bitmap_data) 
 {
 	if (bitmap_data) 

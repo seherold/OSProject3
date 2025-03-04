@@ -10,13 +10,10 @@
 // remove it before you submit. Just allows things to compile initially.
 #define UNUSED(x) (void)(x)
 
-
 typedef struct {
 
-    uint8_t *bitmap;   // Bitmap to track free/used blocks
-    uint8_t *data;     // Blocks are contiguous, essentially making a block device a giant physical array, this is that array
-    size_t num_blocks; // Total number of blocks in the block storage device
-    size_t block_size; // The number of bytes per block
+    bitmap_t* bitmap;   // Bitmap to track free/used blocks
+    uint8_t* data;     // Blocks are contiguous, essentially making a block device a giant physical array, this is that array
 
 } block_store_t;
 
@@ -40,7 +37,18 @@ function.
 ///
 block_store_t *block_store_create()
 {
-	return NULL;
+	block_store_t* bs = (block_store_t*)calloc(1, sizeof(block_store_t));
+	// Allocate memory for bs->data
+	bs->bitmap = bitmap_overlay(BITMAP_SIZE_BITS, bs->data[BITMAP_START_BLOCK]);
+	for (int i = BITMAP_START_BLOCK; i < BITMAP_START_BLOCK + BITMAP_NUM_BLOCKS; i++)
+	{
+		if (block_store_request(bs, i) == false)
+		{
+			// Clean up memory before returning
+			return NULL;
+		}
+	}
+	return bs;
 }
 
 
