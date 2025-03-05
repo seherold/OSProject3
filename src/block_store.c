@@ -89,8 +89,20 @@ it frees the memory allocated to the bitmap and then to the block store.
 ///
 void block_store_destroy(block_store_t *const bs)
 {
-	if(bs){
-		free(bs->bitmap);
+	if(bs)
+	{
+		if (bs->bitmap)
+		{
+			bitmap_destroy(bs->bitmap);
+			bs->bitmap = NULL;
+		}
+
+		if(bs->data)
+		{
+			free(bs->data);
+			bs->data = NULL;
+		}
+
 		free(bs);
 	}
 }
