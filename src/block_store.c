@@ -38,13 +38,33 @@ function.
 block_store_t *block_store_create()
 {
 	block_store_t* bs = (block_store_t*)calloc(1, sizeof(block_store_t));
-	// Allocate memory for bs->data
-	bs->bitmap = bitmap_overlay(BITMAP_SIZE_BITS, bs->data[BITMAP_START_BLOCK]);
+	if (bs == NULL)
+	{
+		return NULL;
+	}
+
+	bs->data = (uint8_t*)calloc(BLOCK_STORE_NUM_BLOCKS, BLOCK_SIZE_BYTES);
+	if (bs->data == NULL)
+	{
+		free(bs);
+		return NULL;
+	}
+
+	bs->bitmap = bitmap_overlay(BITMAP_SIZE_BITS, bs->data + (BITMAP_START_BLOCK * BLOCK_SIZE_BYTES));
+	if (bs->bitmap == NULL)
+	{
+		free(bs->data);
+		free(bs);
+		return NULL;
+	}
+
 	for (int i = BITMAP_START_BLOCK; i < BITMAP_START_BLOCK + BITMAP_NUM_BLOCKS; i++)
 	{
 		if (block_store_request(bs, i) == false)
 		{
-			// Clean up memory before returning
+			bitmap_destroy(bs->bitmap);
+			free(bs->data);
+			free(bs);
 			return NULL;
 		}
 	}
