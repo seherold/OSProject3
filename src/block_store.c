@@ -165,7 +165,7 @@ the block was successfully marked as allocated, false otherwise.
 ///
 bool block_store_request(block_store_t *const bs, const size_t block_id)
 {
-	if (bs == NULL || block_id >= BLOCK_STORE_NUM_BLOCKS || bitmap_test(bs->bitmap, block_id))
+	if (bs == NULL || block_id > BLOCK_STORE_NUM_BLOCKS || bitmap_test(bs->bitmap, block_id))
 	{
 		return false;
 	}
