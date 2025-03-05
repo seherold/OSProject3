@@ -10,12 +10,12 @@
 // remove it before you submit. Just allows things to compile initially.
 #define UNUSED(x) (void)(x)
 
-typedef struct {
+struct block_store {
 
     bitmap_t* bitmap;   // Bitmap to track free/used blocks
     uint8_t* data;     // Blocks are contiguous, essentially making a block device a giant physical array, this is that array
 
-} block_store_t;
+};
 
 
 /*
@@ -125,8 +125,21 @@ or SIZE_MAX if no free block is available.
 ///
 size_t block_store_allocate(block_store_t *const bs)
 {
-	UNUSED(bs);
-	return 0;
+	if (bs == NULL)
+	{
+		return SIZE_MAX;
+	}
+
+	size_t ffzAddress = bitmap_ffz(bs->bitmap);
+	
+	if (ffzAddress == SIZE_MAX)
+	{
+		return SIZE_MAX;
+	}
+	
+	bitmap_set(bs->bitmap, ffzAddress);
+
+	return ffzAddress;
 }
 
 
@@ -152,9 +165,14 @@ the block was successfully marked as allocated, false otherwise.
 ///
 bool block_store_request(block_store_t *const bs, const size_t block_id)
 {
-	UNUSED(bs);
-	UNUSED(block_id);
-	return false;
+	if (bs == NULL || block_id >= BLOCK_STORE_NUM_BLOCKS || bitmap_test(bs->bitmap, block_id))
+	{
+		return false;
+	}
+
+	bitmap_set(bs->bitmap, block_id);
+
+	return bitmap_test(bs->bitmap, block_id);
 }
 
 
@@ -176,8 +194,10 @@ bit corresponding to the block in the bitmap.
 ///
 void block_store_release(block_store_t *const bs, const size_t block_id)
 {
-	UNUSED(bs);
-	UNUSED(block_id);
+	if (bs && block_id < BLOCK_STORE_NUM_BLOCKS)
+	{
+		bitmap_reset(bs->bitmap, block_id);
+	}
 }
 
 /*
@@ -198,8 +218,12 @@ count the number of set bits in the bitmap.
 ///
 size_t block_store_get_used_blocks(const block_store_t *const bs)
 {
-	UNUSED(bs);
-	return 0;
+	if (bs == NULL)
+	{
+		return SIZE_MAX;
+	}
+
+	return bitmap_total_set(bs->bitmap);
 }
 
 
@@ -222,8 +246,12 @@ and BLOCK_STORE_NUM_BLOCKS.
 ///
 size_t block_store_get_free_blocks(const block_store_t *const bs)
 {
-	UNUSED(bs);
-	return 0;
+	if (bs == NULL)
+	{
+		return SIZE_MAX;
+	}
+
+	return BLOCK_STORE_NUM_BLOCKS - block_store_get_used_blocks(bs);
 }
 
 
@@ -243,7 +271,7 @@ store, which is defined by BLOCK_STORE_NUM_BLOCKS.
 ///
 size_t block_store_get_total_blocks()
 {
-	return 0;
+	return BLOCK_STORE_NUM_BLOCKS;
 }
 
 
