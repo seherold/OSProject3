@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "bitmap.h"
 #include "block_store.h"
@@ -165,7 +166,7 @@ the block was successfully marked as allocated, false otherwise.
 ///
 bool block_store_request(block_store_t *const bs, const size_t block_id)
 {
-	if (bs == NULL || block_id > BLOCK_STORE_NUM_BLOCKS || bitmap_test(bs->bitmap, block_id))
+	if (bs == NULL || block_id >= BLOCK_STORE_NUM_BLOCKS || bitmap_test(bs->bitmap, block_id))
 	{
 		return false;
 	}
@@ -293,10 +294,22 @@ reads the contents of a block into a buffer. It returns the number of bytes succ
 ///
 size_t block_store_read(const block_store_t *const bs, const size_t block_id, void *buffer)
 {
-	UNUSED(bs);
-	UNUSED(block_id);
-	UNUSED(buffer);
-	return 0;
+	if (bs == NULL || bs->data  == NULL || buffer == NULL || block_id >= BLOCK_STORE_NUM_BLOCKS)
+	{
+		return 0;
+	}
+
+	// block_id is valid but this block is not in use, cannot read data from it
+	// I'm not sure if we would be able to safely test a bit if it's block_id  wasn't valid
+	if (bitmap_test(bs->bitmap, block_id) == 0)
+	{
+		return 0;
+	}
+
+	memcpy(buffer, bs->data + (block_id * BLOCK_SIZE_BYTES), BLOCK_SIZE_BYTES);
+
+	return BLOCK_SIZE_BYTES;
+	
 }
 
 /*
@@ -317,10 +330,21 @@ the contents of a buffer to a block. It returns the number of bytes successfully
 ///
 size_t block_store_write(block_store_t *const bs, const size_t block_id, const void *buffer)
 {
-	UNUSED(bs);
-	UNUSED(block_id);
-	UNUSED(buffer);
-	return 0;
+	if (bs == NULL || bs->data  == NULL || buffer == NULL || block_id >= BLOCK_STORE_NUM_BLOCKS)
+	{
+		return 0;
+	}
+
+	// block_id is valid but this block is not in use, cannot read data from it
+	// I'm not sure if we would be able to safely test a bit if it's block_id  wasn't valid
+	if (bitmap_test(bs->bitmap, block_id) == 0)
+	{
+		return 0;
+	}
+
+	memcpy(bs->data + (block_id * BLOCK_SIZE_BYTES), buffer, BLOCK_SIZE_BYTES);
+
+	return BLOCK_SIZE_BYTES;
 }
 
 /*
@@ -363,7 +387,30 @@ to accept padding if present.
 ///
 size_t block_store_serialize(const block_store_t *const bs, const char *const filename)
 {
-	UNUSED(bs);
-	UNUSED(filename);
-	return 0;
+	if (bs == NULL || bs->data == NULL || filename == NULL) // check for invalid parameters
+    {
+        return 0;
+    }
+
+    FILE* fptr;
+
+    fptr = fopen(filename, "w");
+    if (fptr == NULL)
+    {
+        return 0;
+    }
+
+    
+    size_t numBytesWritten = fwrite(bs->data, sizeof(uint8_t), BLOCK_STORE_NUM_BYTES, fptr);
+    fclose(fptr); // ensures all data is written before checking if the write was successful
+
+    if (numBytesWritten != BLOCK_STORE_NUM_BYTES)
+    {
+		//add padding here
+        return 0;
+    }
+    else
+    {
+        return numBytesWritten;
+    }
 }
