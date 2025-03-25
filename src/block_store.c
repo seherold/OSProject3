@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <errno.h>
 
 #include "bitmap.h"
 #include "block_store.h"
@@ -294,13 +295,13 @@ reads the contents of a block into a buffer. It returns the number of bytes succ
 ///
 size_t block_store_read(const block_store_t *const bs, const size_t block_id, void *buffer)
 {
-	if (bs == NULL || bs->data  == NULL || buffer == NULL || block_id >= BLOCK_STORE_NUM_BLOCKS)
+	if (bs == NULL || bs->bitmap  == NULL || bs->data  == NULL || block_id >= BLOCK_STORE_NUM_BLOCKS || buffer == NULL)
 	{
 		return 0;
 	}
 
-	// block_id is valid but this block is not in use, cannot read data from it
-	// I'm not sure if we would be able to safely test a bit if it's block_id  wasn't valid
+	// block_id is valid but this block is not allocated, cannot read data from it
+	// I'm not sure if we would be able to safely test a bit if it's block_id  wasn't valid so this is in a separate check
 	if (bitmap_test(bs->bitmap, block_id) == 0)
 	{
 		return 0;
@@ -330,13 +331,13 @@ the contents of a buffer to a block. It returns the number of bytes successfully
 ///
 size_t block_store_write(block_store_t *const bs, const size_t block_id, const void *buffer)
 {
-	if (bs == NULL || bs->data  == NULL || buffer == NULL || block_id >= BLOCK_STORE_NUM_BLOCKS)
+	if (bs == NULL || bs->bitmap  == NULL || bs->data  == NULL || block_id >= BLOCK_STORE_NUM_BLOCKS || buffer == NULL)
 	{
 		return 0;
 	}
 
-	// block_id is valid but this block is not in use, cannot read data from it
-	// I'm not sure if we would be able to safely test a bit if it's block_id  wasn't valid
+	// block_id is valid but this block is not allocated, cannot write data to it
+	// I'm not sure if we would be able to safely test a bit if it's block_id  wasn't valid so this is in a separate check
 	if (bitmap_test(bs->bitmap, block_id) == 0)
 	{
 		return 0;
@@ -363,8 +364,34 @@ from a file. It returns a pointer to the resulting block_store_t struct.
 ///
 block_store_t *block_store_deserialize(const char *const filename)
 {
-	UNUSED(filename);
-	return NULL;
+	if (filename == NULL) // check for invalid parameters
+    {
+        return 0;
+    }
+
+    FILE* fptr;
+
+    fptr = fopen(filename, "r");
+    if (fptr == NULL)
+    {
+		perror("Error opening file for reading");
+        return 0;
+    }
+
+	block_store_t* bs = block_store_create();
+
+    size_t numBytesRead = fread(bs->data, sizeof(uint8_t), BLOCK_STORE_NUM_BYTES, fptr);
+    fclose(fptr); // ensures all data is written before checking if the write was successful
+
+    if (numBytesRead != BLOCK_STORE_NUM_BYTES)
+    {
+		//add padding here
+        return 0;
+    }
+    else
+    {
+        return bs;
+    }
 }
 
 /*
@@ -372,7 +399,9 @@ block_store_t *block_store_deserialize(const char *const filename)
 Implementation Guidelines for block_store_serialize
 
 block_store_serialize(const block_store_t *const bs, const char *const filename): This function serializes 
-a block store to a file. It returns the size of the resulting file in bytes. Note: If a test case 
+a block store to a file. It returns the size of the resulting file in bytes. 
+
+Note: If a test case 
 expects a specific number of bytes to be written but your file is smaller, pad the rest of the file 
 with zeros until the file is of the expected size. Modify your block_store_deserialize function accordingly 
 to accept padding if present.
@@ -387,7 +416,7 @@ to accept padding if present.
 ///
 size_t block_store_serialize(const block_store_t *const bs, const char *const filename)
 {
-	if (bs == NULL || bs->data == NULL || filename == NULL) // check for invalid parameters
+	if (bs == NULL || bs->bitmap  == NULL|| bs->data == NULL || filename == NULL) // check for invalid parameters
     {
         return 0;
     }
@@ -397,6 +426,7 @@ size_t block_store_serialize(const block_store_t *const bs, const char *const fi
     fptr = fopen(filename, "w");
     if (fptr == NULL)
     {
+		perror("Error opening file for writing");
         return 0;
     }
 
@@ -406,7 +436,7 @@ size_t block_store_serialize(const block_store_t *const bs, const char *const fi
 
     if (numBytesWritten != BLOCK_STORE_NUM_BYTES)
     {
-		//add padding here
+		//add padding here?
         return 0;
     }
     else
