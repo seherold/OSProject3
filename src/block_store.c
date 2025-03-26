@@ -127,7 +127,7 @@ or SIZE_MAX if no free block is available.
 ///
 size_t block_store_allocate(block_store_t *const bs)
 {
-	if (bs == NULL)
+	if (bs == NULL || bs->bitmap == NULL)
 	{
 		return SIZE_MAX;
 	}
@@ -167,7 +167,14 @@ the block was successfully marked as allocated, false otherwise.
 ///
 bool block_store_request(block_store_t *const bs, const size_t block_id)
 {
-	if (bs == NULL || block_id >= BLOCK_STORE_NUM_BLOCKS || bitmap_test(bs->bitmap, block_id))
+	if (bs == NULL || bs->bitmap == NULL || block_id >= BLOCK_STORE_NUM_BLOCKS)
+	{
+		return false;
+	}
+
+	// block_id is valid and this block is already in use
+	// I'm not sure if we would be able to safely test a bit if it's block_id  wasn't valid so this is in a separate check
+	if (bitmap_test(bs->bitmap, block_id) == 1)
 	{
 		return false;
 	}
@@ -196,7 +203,7 @@ bit corresponding to the block in the bitmap.
 ///
 void block_store_release(block_store_t *const bs, const size_t block_id)
 {
-	if (bs && block_id < BLOCK_STORE_NUM_BLOCKS)
+	if (bs != NULL && bs->bitmap != NULL && block_id < BLOCK_STORE_NUM_BLOCKS)
 	{
 		bitmap_reset(bs->bitmap, block_id);
 	}
@@ -220,7 +227,7 @@ count the number of set bits in the bitmap.
 ///
 size_t block_store_get_used_blocks(const block_store_t *const bs)
 {
-	if (bs == NULL)
+	if (bs == NULL || bs->bitmap == NULL)
 	{
 		return SIZE_MAX;
 	}
@@ -248,7 +255,7 @@ and BLOCK_STORE_NUM_BLOCKS.
 ///
 size_t block_store_get_free_blocks(const block_store_t *const bs)
 {
-	if (bs == NULL)
+	if (bs == NULL || bs->bitmap == NULL)
 	{
 		return SIZE_MAX;
 	}
@@ -293,9 +300,9 @@ reads the contents of a block into a buffer. It returns the number of bytes succ
 /// \param buffer Data buffer to write to
 /// \return Number of bytes read, 0 on error
 ///
-size_t block_store_read(const block_store_t *const bs, const size_t block_id, void *buffer)
+size_t block_store_read(const block_store_t *const bs, const size_t block_id, void *buffer) // this function definition assumes that the user is passing a buffer that is at least BLOCK_SIZE_BYTES, if we passed the size of the buffer we could more safely write to the buffer with memcpy_s that would clear the buffer if we overflowed it
 {
-	if (bs == NULL || bs->bitmap  == NULL || bs->data  == NULL || block_id >= BLOCK_STORE_NUM_BLOCKS || buffer == NULL)
+	if (bs == NULL || bs->bitmap == NULL || bs->data  == NULL || block_id >= BLOCK_STORE_NUM_BLOCKS || buffer == NULL)
 	{
 		return 0;
 	}
@@ -366,7 +373,7 @@ block_store_t *block_store_deserialize(const char *const filename)
 {
 	if (filename == NULL) // check for invalid parameters
     {
-        return 0;
+        return NULL;
     }
 
     FILE* fptr;
@@ -375,18 +382,30 @@ block_store_t *block_store_deserialize(const char *const filename)
     if (fptr == NULL)
     {
 		perror("Error opening file for reading");
-        return 0;
+        return NULL;
     }
 
 	block_store_t* bs = block_store_create();
+	if (bs == NULL)
+	{
+		return NULL;
+	}
 
     size_t numBytesRead = fread(bs->data, sizeof(uint8_t), BLOCK_STORE_NUM_BYTES, fptr);
-    fclose(fptr); // ensures all data is written before checking if the write was successful
+
+	// reading the full bs->data array in already covers the padding issue described, padding not implemented here
+
+	if (fclose(fptr) != 0) // ensures all data is read before checking if the read was successful
+	{
+		perror("Error closing the file");
+        return NULL;
+	}
 
     if (numBytesRead != BLOCK_STORE_NUM_BYTES)
     {
-		//add padding here
-        return 0;
+		perror("Error reading from file"); // we didn't read the entire block store from the file, deserializing is only successful if we read the entire block store
+		block_store_destroy(bs);
+        return NULL;
     }
     else
     {
@@ -432,15 +451,25 @@ size_t block_store_serialize(const block_store_t *const bs, const char *const fi
 
     
     size_t numBytesWritten = fwrite(bs->data, sizeof(uint8_t), BLOCK_STORE_NUM_BYTES, fptr);
-    fclose(fptr); // ensures all data is written before checking if the write was successful
 
+	// writing the full bs->data array already covers the padding issue described above, padding not implemented here
+
+	if (fclose(fptr) != 0) // ensures all data is written before checking if the write was successful
+	{
+		perror("Error closing the file");
+        return 0;
+	}
+
+	// is serialize only successful if the entire block store was written?
     if (numBytesWritten != BLOCK_STORE_NUM_BYTES)
     {
-		//add padding here?
+		perror("Error writing to file"); // we didn't write the entire block store, deserializing is only successful if we read the entire block store
         return 0;
     }
     else
     {
-        return numBytesWritten;
-    }
+        return numBytesWritten; // It should return the size of the resulting file in bytes -- is numBytesWritten the same as the the size of the resulting file in bytes?
+								// function comment say \return Number of bytes written, but implementation details says it returns the size of the resulting file in bytes -- are we to assume these are the same? 
+								// This should always be BLOCK_STORE_NUM_BYTES if we are assuming serialize is only successful if the entire block store was written
+	}
 }
