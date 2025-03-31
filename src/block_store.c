@@ -378,7 +378,7 @@ block_store_t *block_store_deserialize(const char *const filename)
 
     FILE* fptr;
 
-    fptr = fopen(filename, "r");
+    fptr = fopen(filename, "rb");
     if (fptr == NULL)
     {
 		perror("Error opening file for reading");
@@ -388,29 +388,31 @@ block_store_t *block_store_deserialize(const char *const filename)
 	block_store_t* bs = block_store_create();
 	if (bs == NULL)
 	{
+		fclose(fptr);
 		return NULL;
 	}
 
     size_t numBytesRead = fread(bs->data, sizeof(uint8_t), BLOCK_STORE_NUM_BYTES, fptr);
 
 	// reading the full bs->data array in already covers the padding issue described, padding not implemented here
+	
+	fclose(fptr); //close file regardless of sucessful read or not
 
+	/* file should always close 
 	if (fclose(fptr) != 0) // ensures all data is read before checking if the read was successful
 	{
 		perror("Error closing the file");
         return NULL;
 	}
-
+	*/
     if (numBytesRead != BLOCK_STORE_NUM_BYTES)
     {
 		perror("Error reading from file"); // we didn't read the entire block store from the file, deserializing is only successful if we read the entire block store
 		block_store_destroy(bs);
         return NULL;
     }
-    else
-    {
-        return bs;
-    }
+	//else statement not required
+    return bs;
 }
 
 /*
@@ -442,16 +444,24 @@ size_t block_store_serialize(const block_store_t *const bs, const char *const fi
 
     FILE* fptr;
 
-    fptr = fopen(filename, "w");
+    fptr = fopen(filename, "wv");
     if (fptr == NULL)
     {
 		perror("Error opening file for writing");
         return 0;
     }
-
+	
     
-    size_t numBytesWritten = fwrite(bs->data, sizeof(uint8_t), BLOCK_STORE_NUM_BYTES, fptr);
-
+    size_t numBytesWritten = 0;
+	while(numBytesWritten < BLOCK_STORE_NUM_BYTES){
+		size_t bytesWritten = fwrite(bs->data + numBytesWritten, 1, BLOCK_STORE_NUM_BYTES - numBytesWritten, fptr);
+		if(bytesWritten == 0){ //Check for fwrite failed
+			perror("Error writing to file");
+			fclose(fptr);
+			return 0;
+		}
+		numBytesWritten += bytesWritten;
+	}
 	// writing the full bs->data array already covers the padding issue described above, padding not implemented here
 
 	if (fclose(fptr) != 0) // ensures all data is written before checking if the write was successful
