@@ -1,8 +1,9 @@
+#include <unistd.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <errno.h>
-
+#include <fcntl.h>
 #include "bitmap.h"
 #include "block_store.h"
 // include more if you need
@@ -376,10 +377,9 @@ block_store_t *block_store_deserialize(const char *const filename)
         return NULL;
     }
 
-    FILE* fptr;
 
-    fptr = fopen(filename, "rb");
-    if (fptr == NULL)
+    int fd = open(filename, O_RDONLY);
+    if (fd == -1)
     {
 		perror("Error opening file for reading");
         return NULL;
@@ -388,23 +388,20 @@ block_store_t *block_store_deserialize(const char *const filename)
 	block_store_t* bs = block_store_create();
 	if (bs == NULL)
 	{
-		fclose(fptr);
+		close(fd);
 		return NULL;
 	}
 
-    size_t numBytesRead = fread(bs->data, sizeof(uint8_t), BLOCK_STORE_NUM_BYTES, fptr);
+    size_t numBytesRead = read(fd, bs->data, BLOCK_STORE_NUM_BYTES);
 
 	// reading the full bs->data array in already covers the padding issue described, padding not implemented here
-	
-	fclose(fptr); //close file regardless of sucessful read or not
 
-	/* file should always close 
-	if (fclose(fptr) != 0) // ensures all data is read before checking if the read was successful
+	if (close(fd) != 0) // ensures all data is read before checking if the read was successful
 	{
 		perror("Error closing the file");
         return NULL;
 	}
-	*/
+	
     if (numBytesRead != BLOCK_STORE_NUM_BYTES)
     {
 		perror("Error reading from file"); // we didn't read the entire block store from the file, deserializing is only successful if we read the entire block store
@@ -442,10 +439,9 @@ size_t block_store_serialize(const block_store_t *const bs, const char *const fi
         return 0;
     }
 
-    FILE* fptr;
-
-    fptr = fopen(filename, "wv");
-    if (fptr == NULL)
+	int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    
+	if (fd == -1)
     {
 		perror("Error opening file for writing");
         return 0;
@@ -454,17 +450,17 @@ size_t block_store_serialize(const block_store_t *const bs, const char *const fi
     
     size_t numBytesWritten = 0;
 	while(numBytesWritten < BLOCK_STORE_NUM_BYTES){
-		size_t bytesWritten = fwrite(bs->data + numBytesWritten, 1, BLOCK_STORE_NUM_BYTES - numBytesWritten, fptr);
-		if(bytesWritten == 0){ //Check for fwrite failed
+		size_t bytesWritten = write(fd, bs->data + numBytesWritten, BLOCK_STORE_NUM_BYTES - numBytesWritten);
+		if(bytesWritten <= 0){ //Check for write failed
 			perror("Error writing to file");
-			fclose(fptr);
+			close(fd);
 			return 0;
 		}
 		numBytesWritten += bytesWritten;
 	}
 	// writing the full bs->data array already covers the padding issue described above, padding not implemented here
 
-	if (fclose(fptr) != 0) // ensures all data is written before checking if the write was successful
+	if (close(fd) != 0) // ensures all data is written before checking if the write was successful
 	{
 		perror("Error closing the file");
         return 0;
