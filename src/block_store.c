@@ -379,7 +379,7 @@ block_store_t *block_store_deserialize(const char *const filename)
 
 
     int fd = open(filename, O_RDONLY);
-    if (fd == -1)
+    if (fd == -1) // if open failed
     {
 		perror("Error opening file for reading");
         return NULL;
@@ -402,6 +402,7 @@ block_store_t *block_store_deserialize(const char *const filename)
         return NULL;
 	}
 	
+	// deserializing is only successful if the entire block store was read
     if (numBytesRead != BLOCK_STORE_NUM_BYTES)
     {
 		perror("Error reading from file"); // we didn't read the entire block store from the file, deserializing is only successful if we read the entire block store
@@ -439,15 +440,15 @@ size_t block_store_serialize(const block_store_t *const bs, const char *const fi
         return 0;
     }
 
-	int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+	int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0666); // need comment here
     
-	if (fd == -1)
+	if (fd == -1) // if open failed
     {
 		perror("Error opening file for writing");
         return 0;
     }
 	
-    
+    // looping structure is more robust than using write() of for the whole block_store
     size_t numBytesWritten = 0;
 	while(numBytesWritten < BLOCK_STORE_NUM_BYTES){
 		size_t bytesWritten = write(fd, bs->data + numBytesWritten, BLOCK_STORE_NUM_BYTES - numBytesWritten);
@@ -466,16 +467,14 @@ size_t block_store_serialize(const block_store_t *const bs, const char *const fi
         return 0;
 	}
 
-	// is serialize only successful if the entire block store was written?
+	// serialize is only successful if the entire block store was written
     if (numBytesWritten != BLOCK_STORE_NUM_BYTES)
     {
-		perror("Error writing to file"); // we didn't write the entire block store, deserializing is only successful if we read the entire block store
+		perror("Error writing to file"); // we didn't write the entire block store, serializing is only successful if we read the entire block store
         return 0;
     }
     else
     {
-        return numBytesWritten; // It should return the size of the resulting file in bytes -- is numBytesWritten the same as the the size of the resulting file in bytes?
-								// function comment say \return Number of bytes written, but implementation details says it returns the size of the resulting file in bytes -- are we to assume these are the same? 
-								// This should always be BLOCK_STORE_NUM_BYTES if we are assuming serialize is only successful if the entire block store was written
+        return numBytesWritten; // This should always be BLOCK_STORE_NUM_BYTES since we are assuming serialize is only successful if the entire block store was written
 	}
 }
